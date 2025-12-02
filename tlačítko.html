@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demokratický Kompas: Váš Vliv na Svobodu</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; color: #333; line-height: 1.6; }
+        .container { max-width: 1000px; margin: 40px auto; padding: 25px; background: #fff; border-radius: 10px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
+        h1 { color: #1e88e5; text-align: center; margin-bottom: 25px; }
+        .chart-box { padding: 20px; background-color: #e3f2fd; border-radius: 8px; margin-bottom: 30px; }
+        .question-box { background-color: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid #1e88e5; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05); }
+        .answer-btn { display: block; width: 100%; padding: 12px; margin: 10px 0; border: none; background-color: #4db6ac; color: white; font-size: 16px; border-radius: 5px; cursor: pointer; transition: background-color 0.3s, transform 0.1s; }
+        .answer-btn:hover:not(:disabled) { background-color: #00897b; transform: translateY(-1px); }
+        .answer-btn:disabled { background-color: #ccc; cursor: not-allowed; }
+        #score-display { text-align: center; font-size: 1.5em; font-weight: bold; padding: 15px; background-color: #fff3e0; border: 1px solid #ffcc80; border-radius: 5px; margin-top: 30px; }
+        .feedback { margin-top: 15px; padding: 10px; border-radius: 5px; text-align: center; font-weight: bold; }
+        .positive { background-color: #c8e6c9; color: #388e3c; }
+        .negative { background-color: #ffcdd2; color: #d32f2f; }
+        .reset-btn { background-color: #1e88e5; margin-top: 20px; }
+        .reset-btn:hover { background-color: #1565c0; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🌍 Demokratický Kompas: Váš Vliv na Svobodu</h1>
+    
+    <div id="score-display">
+        Aktuální Skóre Demokracie Projektu: <span id="current-score">0</span> bodů
+    </div>
+
+    <div class="chart-box">
+        <h2>📊 Porovnání s referenčními státy</h2>
+        <canvas id="democracyChart"></canvas>
+    </div>
+
+    <h2>❓ Otázka <span id="question-number">1</span> z 10</h2>
+    
+    <div id="quiz-container">
+        </div>
+
+    <div id="results" style="display: none;">
+        <h2>🎉 Konec Hry!</h2>
+        <p>Dosáhli jste konečného skóre: <span id="final-score">0</span> bodů.</p>
+        <p id="final-verdict"></p>
+        <button class="answer-btn reset-btn" onclick="resetQuiz()">Začít znovu</button>
+    </div>
+
+</div>
+
+<script>
+    // ** GLOBÁLNÍ PROMĚNNÉ **
+    let currentScore = 0;
+    let currentQuestionIndex = 0;
+    let projectData = { fh: 5, hfi: 5, eiu: 5 }; // Výchozí pozice projektu
+    const scoreEffect = 0.5; // Vliv na indexy za 1 bod
+    let democracyChart; // Proměnná pro instanci Chart.js
+
+    // ** DOM ELEMENTY **
+    const quizContainer = document.getElementById('quiz-container');
+    const scoreDisplay = document.getElementById('current-score');
+    const questionNumberDisplay = document.getElementById('question-number');
+    const resultsDiv = document.getElementById('results');
+    const finalScoreDisplay = document.getElementById('final-score');
+    const finalVerdictDisplay = document.getElementById('final-verdict');
+    const ctx = document.getElementById('democracyChart').getContext('2d');
+
+    // Pevné body 4 států (referenční data)
+    const fixedStatesData = {
+        'Finsko 🇫🇮 (Demokracie)': { fh: 10, hfi: 9.5, eiu: 9.2 }, 
+        'Maďarsko 🇭🇺 (Hybridní Režim)': { fh: 7, hfi: 7.5, eiu: 6.6 }, 
+        'Bosna a Hercegovina 🇧🇦 (Hybridní Režim)': { fh: 5.5, hfi: 6.0, eiu: 5.2 }, 
+        'Bělorusko 🇧🇾 (Autoritářství)': { fh: 1, hfi: 3.5, eiu: 1.9 }  
+    };
+
+    // Data otázek
+    const questions = [
+        { q: "1. Fungování médií: Jaká by měla být hlavní role médií ve státě?", a: { text: "Být nezávislým kontrolním mechanismem...", score: 3 }, b: { text: "Být primárně nástrojem pro šíření státních informací...", score: 1 }, c: { text: "Být nástrojem státní propagandy...", score: -1 } },
+        { q: "2. Svoboda shromažďování: Kdy mohou občané demonstrovat proti vládě?", a: { text: "Kdykoliv, bez potřeby povolení...", score: 3 }, b: { text: "Pouze na místech určených úřady a s předchozím schválením...", score: 1 }, c: { text: "Demonstrace proti vládě jsou obecně zakázány...", score: -1 } },
+        { q: "3. Nezávislost soudnictví: Jak se vybírají soudci nejvyšších soudů?", a: { text: "Jsou jmenováni na základě odborné způsobilosti...", score: 3 }, b: { text: "Jsou jmenováni premiérem nebo prezidentem s možností politického veta.", score: 1 }, c: { text: "Jsou jmenováni přímo vedoucí stranou nebo diktátorem...", score: -1 } },
+        { q: "4. Opozice: Jakou roli má opozice v parlamentu?", a: { text: "Mají stejný přístup k veřejným financím a médiím...", score: 3 }, b: { text: "Jsou tolerováni, ale je jim systematicky ztěžován přístup k médiím...", score: 1 }, c: { text: "Existuje jen formálně, ve skutečnosti jsou její představitelé zastrašováni...", score: -1 } },
+        { q: "5. Volební proces: Co by mělo zajistit důvěryhodnost voleb?", a: { text: "Všechny strany mají rovný přístup k voličům a výsledky jsou ověřeny nezávislými mezinárodními pozorovateli.", score: 3 }, b: { text: "Volební komise je složena z politicky jmenovaných zástupců...", score: 1 }, c: { text: "Volební komise je pod kontrolou vlády a kritika výsledků je považována za trestný čin.", score: -1 } },
+        { q: "6. Právo na soukromí: Jak stát nakládá s digitální komunikací občanů?", a: { text: "Odposlechy nebo monitorování jsou povoleny pouze na základě soudního příkazu v závažných případech.", score: 3 }, b: { text: "Masivní sledování je běžné, ale stát tvrdí, že je to jen z důvodu národní bezpečnosti.", score: 1 }, c: { text: "Stát má neomezený přístup ke všem datům a komunikaci občanů, často bez soudního dohledu.", score: -1 } },
+        { q: "7. Akademická svoboda: Jaký je vliv vlády na univerzity a výzkum?", a: { text: "Univerzity si zcela nezávisle stanovují obsah výuky a výzkumné priority.", score: 3 }, b: { text: "Vláda dohlíží na financování a může ovlivnit některé obory...", score: 1 }, c: { text: "Vláda určuje, co se smí a nesmí učit nebo zkoumat...", score: -1 } },
+        { q: "8. Korupce a transparentnost: Jaký je postoj státu k odhalené korupci?", a: { text: "Vládní úředníci jsou okamžitě vyšetřováni a stíháni nezávislými orgány...", score: 3 }, b: { text: "Vyšetřování se týká jen opozičních politiků, zatímco případy vládních stran jsou odkládány.", score: 1 }, c: { text: "Korupce vládních úředníků je systematicky zametána pod koberec a odhalení je trestáno.", score: -1 } },
+        { q: "9. Práva menšin: Jak jsou chráněna práva národnostních a sexuálních menšin?", a: { text: "Práva jsou plně chráněna ústavou a zákony, stát aktivně bojuje proti diskriminaci.", score: 3 }, b: { text: "Práva jsou sice deklarována, ale jsou často ignorována...", score: 1 }, c: { text: "Menšiny jsou aktivně diskriminovány, jejich organizace jsou zakázány...", score: -1 } },
+        { q: "10. Změna ústavy: Jak snadno může vláda změnit ústavu?", a: { text: "Vyžaduje širokou politickou shodu (např. dvoutřetinovou většinu)...", score: 3 }, b: { text: "Vládnoucí strana má dostatek hlasů na to, aby mohla změnit ústavu bez konsenzu.", score: 1 }, c: { text: "Vládnoucí strana si může ústavu změnit kdykoliv bez opozice...", score: -1 } }
+    ];
+
+    // Funkce pro barvy
+    function getCountryColor(country) {
+        if (country.includes('Finsko')) return 'rgba(76, 175, 80, 1)'; 
+        if (country.includes('Maďarsko')) return 'rgba(255, 152, 0, 1)'; 
+        if (country.includes('Bosna')) return 'rgba(255, 152, 0, 0.5)'; 
+        if (country.includes('Bělorusko')) return 'rgba(244, 67, 54, 1)'; 
+        return 'rgba(0, 0, 0, 1)';
+    }
+
+    // Vytvoření/Inicializace grafu
+    function createChart() {
+        if (democracyChart) {
+            democracyChart.destroy(); // Zničí starou instanci, pokud existuje
+        }
+        
+        const datasets = Object.keys(fixedStatesData).map(country => ({
+            label: country,
+            data: [
+                fixedStatesData[country].fh, 
+                fixedStatesData[country].hfi, 
+                fixedStatesData[country].eiu
+            ],
+            fill: false,
+            borderColor: getCountryColor(country),
+            pointBackgroundColor: getCountryColor(country),
+            pointRadius: 4,
+            borderWidth: 2,
+        }));
+        
+        datasets.push({
+            label: 'Váš Projekt (Pohyb)',
+            data: [projectData.fh, projectData.hfi, projectData.eiu],
+            backgroundColor: 'rgba(30, 136, 229, 0.4)', 
+            borderColor: 'rgba(30, 136, 229, 1)',
+            pointBackgroundColor: 'rgba(30, 136, 229, 1)',
+            pointRadius: 6,
+            borderWidth: 3,
+        });
+
+        democracyChart = new Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: ['Freedom House', 'Human Freedom Index', 'EIU Democracy Index'],
+                datasets: datasets
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                scales: {
+                    r: {
+                        angleLines: { display: true },
+                        suggestedMin: 0,
+                        suggestedMax: 10,
+                        ticks: { stepSize: 2, z: 1, color: '#333' },
+                        grid: { color: 'rgba(0, 0, 0, 0.1)' }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': ' + context.formattedValue + ' b.';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Aktualizace dat projektu v grafu
+    function updateChart(scoreChange) {
+        const change = scoreChange * scoreEffect;
+        
+        projectData.fh = Math.max(0, Math.min(10, projectData.fh + change));
+        projectData.hfi = Math.max(0, Math.min(10, projectData.hfi + change));
+        projectData.eiu = Math.max(0, Math.min(10, projectData.eiu + change));
+
+        const projectDatasetIndex = democracyChart.data.datasets.length - 1;
+        democracyChart.data.datasets[projectDatasetIndex].data = [
+            projectData.fh, projectData.hfi, projectData.eiu
+        ];
+        
+        democracyChart.update();
+    }
+
+    // Funkce pro zobrazení aktuální otázky
+    function showQuestion() {
+        if (currentQuestionIndex < questions.length) {
+            const qData = questions[currentQuestionIndex];
+            questionNumberDisplay.textContent = currentQuestionIndex + 1;
+            
+            quizContainer.innerHTML = `
+                <div class="question-box">
+                    <strong>${qData.q}</strong>
+                </div>
+                <div id="answer-buttons">
+                    <button class="answer-btn" onclick="selectAnswer(${qData.a.score})">A: ${qData.a.text}</button>
+                    <button class="answer-btn" onclick="selectAnswer(${qData.b.score})">B: ${qData.b.text}</button>
+                    <button class="answer-btn" onclick="selectAnswer(${qData.c.score})">C: ${qData.c.text}</button>
+                </div>
+                <div id="feedback-message"></div>
+            `;
+        } else {
+            showResults();
+        }
+    }
+
+    // Funkce pro zpracování vybrané odpovědi
+    function selectAnswer(scoreChange) {
+        currentScore += scoreChange;
+        scoreDisplay.textContent = currentScore;
+        
+        updateChart(scoreChange); // Aktualizuje graf
+
+        const feedbackMessage = document.getElementById('feedback-message');
+        feedbackMessage.className = 'feedback';
+
+        if (scoreChange > 0) {
+            feedbackMessage.classList.add('positive');
+            feedbackMessage.innerHTML = `✅ Výborně! Demokracie projektu se **zvýšila o +${scoreChange} bodů**.`;
+        } else if (scoreChange < 0) {
+            feedbackMessage.classList.add('negative');
+            feedbackMessage.innerHTML = `❌ Pozor! Vaše volba projektovou demokracii **snížila o ${scoreChange} bod**.`;
+        } else {
+            feedbackMessage.classList.add('neutral');
+            feedbackMessage.innerHTML = `➡️ Neutrální volba. Demokracie projektu se **změnila o 0 bodů**.`;
+        }
+
+        // Deaktivace tlačítek, aby se zabránilo vícenásobnému kliknutí
+        document.querySelectorAll('.answer-btn').forEach(btn => btn.disabled = true);
+        
+        setTimeout(() => {
+            currentQuestionIndex++;
+            showQuestion();
+        }, 2500);
+    }
+
+    // Funkce pro zobrazení výsledků
+    function showResults() {
+        quizContainer.style.display = 'none';
+        resultsDiv.style.display = 'block';
+        finalScoreDisplay.textContent = currentScore;
+
+        let verdict = "";
+        const maxScore = questions.length * 3; // 30
+        const normalizedProjectScore = (currentScore / maxScore) * 10;
+
+        if (normalizedProjectScore >= 8) {
+            verdict = "Váš Projekt má skóre **Plná demokracie** (blízko Finsku). Skvělé rozhodování!";
+        } else if (normalizedProjectScore >= 5) {
+            verdict = "Váš Projekt je **Chybná demokracie/Hybridní režim** (blízko Maďarsku/Bosně). Některá rozhodnutí oslabila svobody.";
+        } else {
+            verdict = "Váš Projekt je **Autoritářský režim** (blízko Bělorusku). Většina rozhodnutí směřovala k omezování svobod.";
+        }
+        finalVerdictDisplay.innerHTML = verdict;
+    }
+    
+    // ** FUNKČNÍ RESET KVÍZU **
+    function resetQuiz() {
+        // 1. Resetování proměnných na výchozí stav
+        currentScore = 0;
+        currentQuestionIndex = 0;
+        projectData = { fh: 5, hfi: 5, eiu: 5 }; 
+
+        // 2. Skrytí výsledků a zobrazení kvízu
+        resultsDiv.style.display = 'none';
+        quizContainer.style.display = 'block';
+
+        // 3. Resetování zobrazení skóre
+        scoreDisplay.textContent = currentScore;
+        
+        // 4. Resetování grafu (nutné zničit a znovu vytvořit)
+        createChart(); // Funkce nově obsahuje logiku destroy() a vytvoření s resetovanými daty
+
+        // 5. Zobrazení první otázky
+        showQuestion();
+    }
+
+    // Spuštění aplikace po načtení stránky
+    createChart();
+    showQuestion();
+</script>
+
+</body>
+</html>
